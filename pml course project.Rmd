@@ -1,0 +1,96 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "sc-kuo"
+date: "August 11, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Background of the Project
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+# Loading of Data
+```{r}
+library(caret)
+main=read.csv("pml-training.csv")
+test=read.csv("pml-testing.csv")
+```
+
+# Cleaning, Exploration, and Processing of Data
+
+Looking at the data, the first seven columns are irrelevant to the prediction of the "classe" of data. As such, these columns can be removed from the data as follows.
+```{r}
+main=main[,-c(1:7)]
+```
+
+After removing the first seven columns, the main data can now be split into the training and validation datasets. The "classe" column is also copied into separate variables since it is susceptible to the data processing that will be done later on.
+```{r}
+set.seed(159) 
+inTrain <- createDataPartition(main$classe, p = 0.7, list = FALSE)
+train <- main[inTrain, ]
+val <- main[-inTrain, ]
+trainy=train$classe
+valy=val$classe
+```
+
+Next, since the study seeks to target just the data related to the belt, forearm, arm, and dumbell, the data can be filtered out to reduce the number of features to be used for modelling.
+```{r}
+filter = grepl("belt|arm|dumbell", names(train))
+train = train[, filter]
+val = val[, filter]
+```
+
+The variance of the columns is also important to check, and any columns that zero or near zero variance should be removed from the dataset for the model to perform better later on. The data for the "classe" of the observation can be column binded once again to the training and validation datasets for easier use later on.
+```{r}
+NZV <- nearZeroVar(train)
+train <- train[, -NZV]
+val  <- val[, -NZV]
+train=cbind(train,trainy)
+val=cbind(val,valy)
+```
+
+Finally, any columns with NA values should be removed as well so as to ensure the success of the model to be used.
+```{r}
+train<- train[, colSums(is.na(train)) == 0]
+val<- val[, colSums(is.na(val)) == 0]
+```
+
+# Model Training, Validation, and Test
+
+## Training Data
+
+The model to be used for this course project is random forest due to its relative simplicity in implementation, without sacrificing the results. 3-fold cross validation is also implemented so as to improve the results of the random forest.
+```{r}
+set.seed(159)
+controlRF <- trainControl(method="cv", number=3, verboseIter=FALSE)
+modRF1 <- train(trainy ~ ., data=train, method="rf", trControl=controlRF)
+```
+
+After the training of the model, we can now observe how well our model performed based on the training set, and observe the necessary parameters such as accuracy.
+```{r}
+modRF1$finalModel
+```
+
+As can be noted above, the total average error rate is less than 2%, which indicates that the model is excellent at predicting the classe of the observations.
+
+## Validation Results
+
+With an average accuracy greater than 98%, it can be said that the model created through random forest is an acceptable model and can thus be implemented. Of course, in order to validate this, the validation dataset is also predicted with the model and the results are as follows.
+```{r}
+predictRF1 <- predict(modRF1, newdata=val)
+confusionMatrix(predictRF1, valy)
+```
+
+As can be seen above, the model performs well on the validation set as well, and can thus be relayed for the final test set, and to predict if the movements being performed are correct or not.
+
+## Test Results
+
+Finally, we pass the test set through the model, and below are the predictions for the test set.
+```{r}
+finalpred<-predict(modRF1,newdata=test)
+finalpred
+```
